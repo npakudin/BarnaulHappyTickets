@@ -178,9 +178,9 @@ namespace ConsoleApp1
             for (var i = 0; i < n; i++)
             {
                 var lefts = Braces(i, begin);
-                var rights = Braces(n - i - 1, begin + i + 1);
                 foreach (var left in lefts)
                 {
+                    var rights = Braces(n - i - 1, begin + i + 1);
                     foreach (var right in rights)
                     {
                         foreach (var value in Enum.GetValues(typeof(Operation)))
@@ -200,7 +200,7 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var n = 8;
+            var n = 5;
             
             long totalExpr = 0;
             var map = new Dictionary<double, string>();
@@ -222,9 +222,16 @@ namespace ConsoleApp1
                         continue;
                     }
                     
-                    if (Math.Abs(res) > 10.0E+17)
+                    if (Math.Abs(res) > 50_000)
                     {
                         // ignore too large
+                        continue;
+                    }
+                    
+                    if (Math.Abs(res) < 1.0E-12)
+                    {
+                        // ignore numbers like 1.0E-117
+                        // NOTE: zero is ignored too! 
                         continue;
                     }
                     
