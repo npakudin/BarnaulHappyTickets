@@ -93,11 +93,13 @@ namespace ConsoleApp1
         }
         
         double Cached = Double.NaN;
+        private bool IsCached = false;
 
         public override double Evaluate()
         {
-            if (Double.IsNaN(Cached))
+            if (!IsCached)
             {
+                IsCached = true;
                 Cached = InnerEvaluate();
             }
 
@@ -106,8 +108,9 @@ namespace ConsoleApp1
         
         private double InnerEvaluate()
         {
-            var leftValue = Left.Evaluate();
+            var leftValue = Left.Evaluate();            
             var rightValue = Right.Evaluate();
+            
             switch (Operation)
             {
                 case Operation.Plus:
@@ -125,15 +128,15 @@ namespace ConsoleApp1
                 case Operation.Power:
                     return Math.Pow(leftValue, rightValue);
                 case Operation.Concat:
-                    if (Left.IsConcatenable() && Right.IsConcatenable())
+                    //if (Left.IsConcatenable() && Right.IsConcatenable())
                     {
                         var log10 = Math.Ceiling(Math.Log10(rightValue));
                         return leftValue * Math.Pow(10, log10) + rightValue;
                     }
-                    else
-                    {
-                        throw new DivideByZeroException();//Exception("Cannot concat");
-                    }
+//                    else
+//                    {
+//                        throw new Exception("Cannot concat");
+//                    }
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -185,6 +188,11 @@ namespace ConsoleApp1
                     {
                         foreach (var value in Enum.GetValues(typeof(Operation)))
                         {
+//                            var l = left.Evaluate();
+//                            var r = right.Evaluate();
+                            
+                            
+                            
                             if ((Operation)value == Operation.Concat &&
                                 !(left.IsConcatenable() && right.IsConcatenable()))
                             {
@@ -200,7 +208,7 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var n = 5;
+            var n = 6;
             
             long totalExpr = 0;
             var map = new Dictionary<double, string>();
@@ -221,20 +229,20 @@ namespace ConsoleApp1
                         // ignore with fraction part
                         continue;
                     }
-                    
+
                     if (Math.Abs(res) > 50_000)
                     {
                         // ignore too large
                         continue;
                     }
-                    
+
                     if (Math.Abs(res) < 1.0E-12)
                     {
                         // ignore numbers like 1.0E-117
                         // NOTE: zero is ignored too! 
                         continue;
                     }
-                    
+
                     if (!map.ContainsKey(res))
                     {
                         map[res] = tree.Print();
