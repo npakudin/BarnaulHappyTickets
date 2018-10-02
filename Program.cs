@@ -188,10 +188,19 @@ namespace ConsoleApp1
                     {
                         foreach (var value in Enum.GetValues(typeof(Operation)))
                         {
-//                            var l = left.Evaluate();
-//                            var r = right.Evaluate();
-                            
-                            
+                            if ((Operation) value == Operation.Power)
+                            {
+                                var r = right.Evaluate();
+                                if (r > 20)
+                                {
+                                    continue;
+                                }
+                                var l = left.Evaluate();
+                                if (l > 4 && r > 10)
+                                {
+                                    continue;
+                                }
+                            }
                             
                             if ((Operation)value == Operation.Concat &&
                                 !(left.IsConcatenable() && right.IsConcatenable()))
@@ -224,7 +233,7 @@ namespace ConsoleApp1
                 {
                     var res = tree.Evaluate();
 
-                    if (res - Math.Floor(res) > 1.0E-12)
+                    if (res - Math.Floor(res) > 1.0E-15)
                     {
                         // ignore with fraction part
                         continue;
@@ -236,7 +245,7 @@ namespace ConsoleApp1
                         continue;
                     }
 
-                    if (Math.Abs(res) < 1.0E-12)
+                    if (Math.Abs(res) < 1.0E-15)
                     {
                         // ignore numbers like 1.0E-117
                         // NOTE: zero is ignored too! 
