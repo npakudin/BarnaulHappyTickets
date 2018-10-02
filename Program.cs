@@ -1,4 +1,41 @@
-﻿using System;
+﻿//Copyright 2018 Nikolay Pakudin
+//
+//Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+//The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+//
+// MIT License
+//
+
+// number of different trees of N nodes is an N-th Catalan number
+// each node can contains one of 6 operations
+// so # of different formulas = # of different trees * # of different signs
+//   = Catalan(n) * 6^n
+
+// n => # of different formulas
+//  0 =>     1 * 6^0  = 1
+//  1 =>     1 * 6^1  = 6
+//  2 =>     2 * 6^2  = 72
+//  3 =>     5 * 6^3  = 1080        ~ 1.0e+3
+//  4 =>    14 * 6^4  = 18144       ~ 1.8e+4
+//  5 =>    42 * 6^5  = 326592      ~ 3.2e+5
+//  6 =>   132 * 6^6  = 6158592     ~ 6.1e+6
+//  7 =>   429 * 6^7  = 120092544   ~ 1.2e+8
+//  8 =>  1430 * 6^8  = 2401850880  ~ 2.4e+9
+//  9 =>  4862 * 6^9  = 48997757952 ~ 4.8e+10
+// 10 => 16796 * 6^10               ~ 1.0155899e+12
+
+// for 1..9
+// total variants: <= operations * braces = 6^9 * 1430 ~= 1.4 * 10^10
+
+// for 1..6
+// total variants: <= operations * braces = 6^5 * 132 ~= 1.0 * 10^6
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,51 +43,62 @@ using System.Text;
 
 namespace ConsoleApp1
 {
-    enum Operation
+    public enum Operation
     {
         Plus,
         Minus,
         Multiply,
         Div,
         Power,
+        // let vertical line - "|" is concat operator
         Concat,
     }
 
-    abstract class Node
+    public abstract class Node
     {
         public Node Left;
         public Node Right;
 
-        public abstract string GetValue();
-
         public abstract double Evaluate();
 
-        public abstract int GetWidth();
+        // returns length of string after concat
+        // (8) -> 1
+        // (6|9) -> 2
+        // (5|5|5) -> 3
+        // (5|5|5|5) -> 4
+        public abstract int GetConcatLength();
 
         public abstract bool IsConcatenable();
 
-        public override string ToString()
+        public abstract string GetPrintValue();
+
+        // Don't create too much strings and StringBuilders, use single StringBuilder
+        private void PrintTo(StringBuilder sb)
         {
-            var sb = new StringBuilder();
             if (Left != null)
             {
                 sb.Append("(");
-                sb.Append(Left);
+                Left.PrintTo(sb);
             }
 
-            sb.Append(GetValue());
+            sb.Append(GetPrintValue());
 
             if (Right != null)
             {
-                sb.Append(Right);
+                Right.PrintTo(sb);
                 sb.Append(")");
             }
-
+        }
+        
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            PrintTo(sb);
             return sb.ToString();
         }
     }
 
-    class NumberNode : Node
+    public class NumberNode : Node
     {
         public int Number;
 
@@ -59,7 +107,7 @@ namespace ConsoleApp1
             return Number;
         }
 
-        public override int GetWidth()
+        public override int GetConcatLength()
         {
             return 1;
         }
@@ -69,13 +117,13 @@ namespace ConsoleApp1
             return true;
         }
 
-        public override string GetValue()
+        public override string GetPrintValue()
         {
             return Number.ToString();
         }
     }
 
-    class OperationNode : Node
+    public class OperationNode : Node
     {
         public Operation Operation;
 
@@ -111,16 +159,15 @@ namespace ConsoleApp1
                 case Operation.Power:
                     return Math.Pow(leftValue, rightValue);
                 case Operation.Concat:
-                    // let | is concat operator
                     // 1|(2|3) = 1|(2*10^1 + 3) = 1|(23) = 1 * 10^2 + 23 = 123 
-                    var log10 = Right.GetWidth();
+                    var log10 = Right.GetConcatLength();
                     return leftValue * Math.Pow(10, log10) + rightValue;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
         }
 
-        public override string GetValue()
+        public override string GetPrintValue()
         {
             switch (Operation)
             {
@@ -146,27 +193,32 @@ namespace ConsoleApp1
             return Operation == Operation.Concat && Left.IsConcatenable() && Right.IsConcatenable();
         }
 
-        public override int GetWidth()
+        public override int GetConcatLength()
         {
-            return Left.GetWidth() + Right.GetWidth();
+            return Left.GetConcatLength() + Right.GetConcatLength();
         }
     }
 
-    internal class Program
+    public class BracesEnumerator
     {
-        const double Epsilon = 1.0E-20;
-        private static string _s = "000000";
+        public const double Epsilon = 1.0E-20;
+        private string _str;
 
-        public static int DigitByIndex(int index)
+        public BracesEnumerator(string str)
         {
-            return _s[index] - 48;
+            _str = str;
         }
 
-        public static IEnumerable<Node> Braces(int n, int begin)
+        public int DigitByIndex(int index)
+        {
+            return _str[index] - 48;
+        }
+
+        public IEnumerable<Node> Braces(int n, int begin)
         {
             if (n == 0)
             {
-                yield return new NumberNode() {Number = DigitByIndex(begin)};
+                yield return new NumberNode {Number = DigitByIndex(begin)};
             }
 
             for (var i = 0; i < n; i++)
@@ -207,131 +259,185 @@ namespace ConsoleApp1
                 }
             }
         }
+    }
 
-        public static void Main(string[] args)
+    internal class Program
+    {
+        public static void BarnaulHappyTickets(string filename, int from, int to)
         {
-            var n = 5;
+            const int signsNumber = 5; // not digits - places between them
 
             long totalExpr = 0;
-            var map = new Dictionary<double, string>();
+            long matchedExpr = 0;
 
             var startTime = DateTime.Now;
-            var fileInfo = new FileInfo($"res-{n}.txt");
-            using (var sr = fileInfo.CreateText())
+            var fileInfo = new FileInfo(filename);
+            
+            // TODO: add failover (for continue work after program stop)
+            // if the last valuable line starts with number, continue from 1st number in the line
+            
+            using (var sw = new StreamWriter(fileInfo.Open(FileMode.Append)))
             {
-                for (int i = 729_802; i <= 999_999; i++)
+                sw.WriteLine($"=============================");
+                for (int i = from; i <= to; i++)
                 {
-                    _s = i.ToString("000000");
-                    var trees = Braces(n, 0);
+                    var bracesEnumerator = new BracesEnumerator(i.ToString("000000"));
+                    var trees = bracesEnumerator.Braces(signsNumber, 0);
                     foreach (var tree in trees)
                     {
                         totalExpr++;
 
-                        try
-                        {
-                            var res = tree.Evaluate();
+                        var res = tree.Evaluate();
 
-                            if (Math.Abs(res - 100) < 1.0E-15)
-                            {
-                                map[i] = tree.ToString();
-                                sr.WriteLine($"{i} = {map[i]}");
-                                break;
-                            }
-
-//                        if (res - Math.Floor(res) > 1.0E-15)
-//                        {
-//                            // ignore with fraction part
-//                            continue;
-//                        }
-//
-//                        if (Math.Abs(res) > 50_000)
-//                        {
-//                            // ignore too large
-//                            continue;
-//                        }
-//
-//                        if (Math.Abs(res) < 1.0E-15)
-//                        {
-//                            // ignore numbers like 1.0E-117
-//                            // NOTE: zero is ignored too! 
-//                            continue;
-//                        }
-//
-//                        if (!map.ContainsKey(res))
-//                        {
-//                            map[res] = tree.Print();
-//                        }
-                        }
-                        catch (DivideByZeroException)
+                        if (Math.Abs(res - 100) < 1.0E-1)
                         {
+                            matchedExpr++;
+                            var treeStr = tree.ToString();
+                            sw.WriteLine($"{i} : {treeStr}");
+                            break;
                         }
 
                         if (totalExpr % 1000000 == 0)
                         {
-                            sr.Flush();
+                            sw.Flush();
                             Console.WriteLine($"totalExpr = {totalExpr}");
-                            //var expr = tree.Print();
-                            //Console.WriteLine($"{expr} = {resStr}");
                         }
                     }
                 }
 
                 var diffTime = DateTime.Now - startTime;
 
-                var keys = map.Keys.ToArray();
-                Array.Sort(keys);
-
-                sr.WriteLine($"=============================");
-//                var prev = 2.0;
-//                var lastOk = 2.0;
-//                foreach (var key in keys)
-//                {
-//                    //Console.WriteLine($"{key} = {map[key]}");
-//                    sr.WriteLine($"{key} = {map[key]}");
-//
-//                    if (key >= prev && lastOk == 2.0)
-//                    {
-//                        if ((Math.Abs(key - prev - 1.0) >= 1.0E-10) && (Math.Abs(key - prev) >= 1.0E-10))
-//                        {
-//                            // not OK
-//                            lastOk = prev;
-//                        }
-//
-//                        prev = key;
-//                    }
-//                }
-//
-//                sr.WriteLine($"lastOk: {lastOk}");
-                sr.WriteLine(
+                sw.WriteLine(
                     $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
-                sr.WriteLine(
-                    $"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
+                sw.WriteLine(
+                    $"real {matchedExpr} in {diffTime.TotalMilliseconds} => {matchedExpr/ diffTime.TotalMilliseconds} records/ms");
 
-                //1Console.WriteLine($"lastOk: {lastOk}");
                 Console.WriteLine(
                     $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
                 Console.WriteLine(
-                    $"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
+                    $"real {matchedExpr} in {diffTime.TotalMilliseconds} => {matchedExpr / diffTime.TotalMilliseconds} records/ms");
             }
+        }
+        
+        public static void Problem10598(string filename, int signsNumber)
+        {
+            var sb = new StringBuilder();
+            for (var i = 1; i <= signsNumber + 1; i++)
+            {
+                sb.Append(i);
+            }
+            
+            //const int signsNumber = 8; // not digits - places between them
+            
+            long totalExpr = 0;
+            long matchedExpr = 0;
+            
+            var map = new Dictionary<double, string>();
+
+            var startTime = DateTime.Now;
+            var fileInfo = new FileInfo(filename);
+            using (var sw = new StreamWriter(fileInfo.Open(FileMode.Create)))
+            {
+                sw.WriteLine($"=============================");
+                var bracesEnumerator = new BracesEnumerator(sb.ToString());
+                var trees = bracesEnumerator.Braces(signsNumber, 0);
+                foreach (var tree in trees)
+                {
+                    totalExpr++;
+
+                    var res = tree.Evaluate();
+
+                    
+                    
+                    if (Math.Abs(res - Math.Round(res)) > BracesEnumerator.Epsilon)
+                    {
+                        // ignore with fraction part
+                        continue;
+                    }
+
+                    if (Math.Abs(res) > 20_000)
+                    {
+                        // ignore too large
+                        continue;
+                    }
+
+                    if (Math.Abs(res) < BracesEnumerator.Epsilon)
+                    {
+                        // ignore numbers like 1.0E-117
+                        // NOTE: zero is ignored too! 
+                        continue;
+                    }
+
+                    if (!map.ContainsKey(res))
+                    {
+                        matchedExpr++;
+                        map[res] = tree.ToString();
+                    }
+
+                    
+                    
+
+                    if (totalExpr % 1000000 == 0)
+                    {
+                        sw.Flush();
+                        Console.WriteLine($"totalExpr = {totalExpr}");
+                    }
+                }
+
+                var diffTime = DateTime.Now - startTime;
+
+                sw.WriteLine(
+                    $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
+                sw.WriteLine(
+                    $"real {matchedExpr} in {diffTime.TotalMilliseconds} => {matchedExpr/ diffTime.TotalMilliseconds} records/ms");
+
+                Console.WriteLine(
+                    $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
+                Console.WriteLine(
+                    $"real {matchedExpr} in {diffTime.TotalMilliseconds} => {matchedExpr / diffTime.TotalMilliseconds} records/ms");
+
+
+                // print keys in sorted order
+                {
+                    sw.WriteLine($"-------- The same sorted --------");
+                    var keys = map.Keys.ToArray();
+                    Array.Sort(keys);
+
+                    var prev = 2.0;
+                    var lastOk = 2.0;
+                    foreach (var key in keys)
+                    {
+                        //Console.WriteLine($"{key} = {map[key]}");
+                        sw.WriteLine($"{key} = {map[key]}");
+
+                        if (key >= prev && Math.Abs(lastOk - 2.0) < BracesEnumerator.Epsilon)
+                        {
+                            if (Math.Abs(key - prev - 1.0) >= BracesEnumerator.Epsilon &&
+                                Math.Abs(key - prev) >= BracesEnumerator.Epsilon)
+                            {
+                                // not OK
+                                lastOk = prev;
+                            }
+
+                            prev = key;
+                        }
+                    }
+                    sw.WriteLine($"lastOk: {lastOk}");
+                }
+            }
+        }
+        
+
+        public static void Main(string[] args)
+        {
+            //var signsNumber = 6;
+            //Problem10598($"res-{signsNumber}.txt", signsNumber);
+
+            var from = 000_000;
+            var to = 000_999;
+            var fromStr = from.ToString("000000");
+            var toStr = to.ToString("000000");
+            BarnaulHappyTickets($"barnaul-{fromStr}-{toStr}.txt", from, to);
         }
     }
 }
-
-// 0 => 1
-// 1 => 1
-// 2 => 2
-// 3 => 5
-// 4 => 14 * 6^5
-// 5 => 42 * 6^6
-// 6 => 132 * 6^7
-// 7 => 429 * 6^8
-// 8 => 1430 - Catalan(8) * 6^9
-// 9 => 4862 - Catalan(9)
-// 10 => 16796 - Catalan(10)
-
-// for 1..9
-// total variants: <= operations * braces = 6^9 * 1430 ~= 1.4 * 10^10
-// <= because + and * are commutative
-
-// for 1..6
-// total variants: <= operations * braces = 6^9 * 1430 ~= 1.4 * 10^10
