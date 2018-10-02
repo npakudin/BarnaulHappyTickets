@@ -10,56 +10,43 @@ namespace ConsoleApp1
     {
         Plus,
         Minus,
-        Mult,
+        Multiply,
         Div,
         Power,
         Concat,
     }
-    
+
     abstract class Node
     {
-        //public string Value;
         public Node Left;
         public Node Right;
 
-        public virtual string GetValue()
-        {
-            return "";
-        }
-        
-        public virtual double Evaluate()
-        {
-            return 0;
-        }
+        public abstract string GetValue();
 
-        public virtual bool IsConcatenable()
-        {
-            return false;
-        }
+        public abstract double Evaluate();
 
-        public string Print()
+        public abstract int GetWidth();
+
+        public abstract bool IsConcatenable();
+
+        public override string ToString()
         {
             var sb = new StringBuilder();
             if (Left != null)
             {
                 sb.Append("(");
-                sb.Append(Left.Print());
+                sb.Append(Left);
             }
 
             sb.Append(GetValue());
 
             if (Right != null)
             {
-                sb.Append(Right.Print());
+                sb.Append(Right);
                 sb.Append(")");
             }
 
             return sb.ToString();
-        }
-
-        public override string ToString()
-        {
-            return Print();
         }
     }
 
@@ -71,77 +58,68 @@ namespace ConsoleApp1
         {
             return Number;
         }
-        
+
+        public override int GetWidth()
+        {
+            return 1;
+        }
+
         public override bool IsConcatenable()
         {
             return true;
         }
-        
+
         public override string GetValue()
         {
             return Number.ToString();
         }
     }
-    
+
     class OperationNode : Node
     {
         public Operation Operation;
-        
-        public override bool IsConcatenable()
-        {
-            return Operation == Operation.Concat && Left.IsConcatenable() && Right.IsConcatenable();
-        }
-        
-        double Cached = Double.NaN;
-        private bool IsCached = false;
+
+        private double _cached = double.NaN;
+        private bool _isCached;
 
         public override double Evaluate()
         {
-            if (!IsCached)
+            if (!_isCached)
             {
-                IsCached = true;
-                Cached = InnerEvaluate();
+                _isCached = true;
+                _cached = InnerEvaluate();
             }
 
-            return Cached;
+            return _cached;
         }
-        
+
         private double InnerEvaluate()
         {
-            var leftValue = Left.Evaluate();            
+            var leftValue = Left.Evaluate();
             var rightValue = Right.Evaluate();
-            
+
             switch (Operation)
             {
                 case Operation.Plus:
                     return leftValue + rightValue;
                 case Operation.Minus:
                     return leftValue - rightValue;
-                case Operation.Mult:
+                case Operation.Multiply:
                     return leftValue * rightValue;
                 case Operation.Div:
-//                    if (rightValue == 0)
-//                    {
-//                        return 0x7FFFFFFF;
-//                    }
                     return leftValue / rightValue;
                 case Operation.Power:
                     return Math.Pow(leftValue, rightValue);
                 case Operation.Concat:
-                    //if (Left.IsConcatenable() && Right.IsConcatenable())
-                    {
-                        var log10 = Math.Ceiling(Math.Log10(rightValue));
-                        return leftValue * Math.Pow(10, log10) + rightValue;
-                    }
-//                    else
-//                    {
-//                        throw new Exception("Cannot concat");
-//                    }
+                    // let | is concat operator
+                    // 1|(2|3) = 1|(2*10^1 + 3) = 1|(23) = 1 * 10^2 + 23 = 123 
+                    var log10 = Right.GetWidth();
+                    return leftValue * Math.Pow(10, log10) + rightValue;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
         }
-        
+
         public override string GetValue()
         {
             switch (Operation)
@@ -150,7 +128,7 @@ namespace ConsoleApp1
                     return "+";
                 case Operation.Minus:
                     return "-";
-                case Operation.Mult:
+                case Operation.Multiply:
                     return "*";
                 case Operation.Div:
                     return "/";
@@ -162,15 +140,28 @@ namespace ConsoleApp1
                     throw new ArgumentOutOfRangeException();
             }
         }
+
+        public override bool IsConcatenable()
+        {
+            return Operation == Operation.Concat && Left.IsConcatenable() && Right.IsConcatenable();
+        }
+
+        public override int GetWidth()
+        {
+            return Left.GetWidth() + Right.GetWidth();
+        }
     }
 
     internal class Program
     {
+        const double Epsilon = 1.0E-20;
+        private static string _s = "000000";
+
         public static int DigitByIndex(int index)
         {
-            return index + 1;
+            return _s[index] - 48;
         }
-        
+
         public static IEnumerable<Node> Braces(int n, int begin)
         {
             if (n == 0)
@@ -188,27 +179,29 @@ namespace ConsoleApp1
                     {
                         foreach (var value in Enum.GetValues(typeof(Operation)))
                         {
-                            if ((Operation) value == Operation.Power)
-                            {
-                                var r = right.Evaluate();
-                                if (r > 20)
-                                {
-                                    continue;
-                                }
-                                var l = left.Evaluate();
-                                if (l > 4 && r > 10)
-                                {
-                                    continue;
-                                }
-                            }
-                            
-                            if ((Operation)value == Operation.Concat &&
+                            if ((Operation) value == Operation.Concat &&
                                 !(left.IsConcatenable() && right.IsConcatenable()))
                             {
+                                // cannot concat 1|(2+3)
+                                continue;
+                            }
+
+                            if ((Operation) value == Operation.Power &&
+                                Math.Abs(left.Evaluate()) <= Epsilon && Math.Abs(right.Evaluate()) <= Epsilon)
+                            {
+                                // cannot calculate 0^0
                                 continue;
                             }
                             
-                            yield return new OperationNode() {Left = left, Right = right, Operation = (Operation)value};                            
+                            if ((Operation) value == Operation.Div &&
+                                Math.Abs(right.Evaluate()) <= double.Epsilon)
+                            {
+                                // cannot divide by zero
+                                continue;
+                            }
+
+                            yield return new OperationNode
+                                {Left = left, Right = right, Operation = (Operation) value};
                         }
                     }
                 }
@@ -217,92 +210,109 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var n = 6;
-            
+            var n = 5;
+
             long totalExpr = 0;
             var map = new Dictionary<double, string>();
 
             var startTime = DateTime.Now;
-            
-            var trees = Braces(n, 0);
-            foreach (var tree in trees)
-            {
-                totalExpr++;
-
-                try
-                {
-                    var res = tree.Evaluate();
-
-                    if (res - Math.Floor(res) > 1.0E-15)
-                    {
-                        // ignore with fraction part
-                        continue;
-                    }
-
-                    if (Math.Abs(res) > 50_000)
-                    {
-                        // ignore too large
-                        continue;
-                    }
-
-                    if (Math.Abs(res) < 1.0E-15)
-                    {
-                        // ignore numbers like 1.0E-117
-                        // NOTE: zero is ignored too! 
-                        continue;
-                    }
-
-                    if (!map.ContainsKey(res))
-                    {
-                        map[res] = tree.Print();
-                    }
-                }
-                catch (DivideByZeroException)
-                {
-                }
-                
-                if (totalExpr % 100000 == 0)
-                {
-                    Console.WriteLine($"totalExpr = {totalExpr}");
-                    //var expr = tree.Print();
-                    //Console.WriteLine($"{expr} = {resStr}");
-                }
-            }
-            
-            var diffTime = DateTime.Now - startTime;
-
-            var keys = map.Keys.ToArray();
-            Array.Sort(keys);
-            
             var fileInfo = new FileInfo($"res-{n}.txt");
             using (var sr = fileInfo.CreateText())
             {
-                sr.WriteLine($"=============================");
-                var prev = 2.0;
-                var lastOk = 2.0;
-                foreach (var key in keys)
+                for (int i = 729_802; i <= 999_999; i++)
                 {
-                    //Console.WriteLine($"{key} = {map[key]}");
-                    sr.WriteLine($"{key} = {map[key]}");
-
-                    if (key >= prev && lastOk == 2.0)
+                    _s = i.ToString("000000");
+                    var trees = Braces(n, 0);
+                    foreach (var tree in trees)
                     {
-                        if ((Math.Abs(key - prev - 1.0) >= 1.0E-10) && (Math.Abs(key - prev) >= 1.0E-10))
+                        totalExpr++;
+
+                        try
                         {
-                            // not OK
-                            lastOk = prev;
+                            var res = tree.Evaluate();
+
+                            if (Math.Abs(res - 100) < 1.0E-15)
+                            {
+                                map[i] = tree.ToString();
+                                sr.WriteLine($"{i} = {map[i]}");
+                                break;
+                            }
+
+//                        if (res - Math.Floor(res) > 1.0E-15)
+//                        {
+//                            // ignore with fraction part
+//                            continue;
+//                        }
+//
+//                        if (Math.Abs(res) > 50_000)
+//                        {
+//                            // ignore too large
+//                            continue;
+//                        }
+//
+//                        if (Math.Abs(res) < 1.0E-15)
+//                        {
+//                            // ignore numbers like 1.0E-117
+//                            // NOTE: zero is ignored too! 
+//                            continue;
+//                        }
+//
+//                        if (!map.ContainsKey(res))
+//                        {
+//                            map[res] = tree.Print();
+//                        }
                         }
-                        prev = key;
+                        catch (DivideByZeroException)
+                        {
+                        }
+
+                        if (totalExpr % 1000000 == 0)
+                        {
+                            sr.Flush();
+                            Console.WriteLine($"totalExpr = {totalExpr}");
+                            //var expr = tree.Print();
+                            //Console.WriteLine($"{expr} = {resStr}");
+                        }
                     }
                 }
-                sr.WriteLine($"lastOk: {lastOk}");
-                sr.WriteLine($"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
-                sr.WriteLine($"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
-                
-                Console.WriteLine($"lastOk: {lastOk}");
-                Console.WriteLine($"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
-                Console.WriteLine($"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
-            }            
+
+                var diffTime = DateTime.Now - startTime;
+
+                var keys = map.Keys.ToArray();
+                Array.Sort(keys);
+
+                sr.WriteLine($"=============================");
+//                var prev = 2.0;
+//                var lastOk = 2.0;
+//                foreach (var key in keys)
+//                {
+//                    //Console.WriteLine($"{key} = {map[key]}");
+//                    sr.WriteLine($"{key} = {map[key]}");
+//
+//                    if (key >= prev && lastOk == 2.0)
+//                    {
+//                        if ((Math.Abs(key - prev - 1.0) >= 1.0E-10) && (Math.Abs(key - prev) >= 1.0E-10))
+//                        {
+//                            // not OK
+//                            lastOk = prev;
+//                        }
+//
+//                        prev = key;
+//                    }
+//                }
+//
+//                sr.WriteLine($"lastOk: {lastOk}");
+                sr.WriteLine(
+                    $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
+                sr.WriteLine(
+                    $"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
+
+                //1Console.WriteLine($"lastOk: {lastOk}");
+                Console.WriteLine(
+                    $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
+                Console.WriteLine(
+                    $"real {map.Count} in {diffTime.TotalMilliseconds} => {map.Count / diffTime.TotalMilliseconds} records/ms");
+            }
         }
     }
 }
