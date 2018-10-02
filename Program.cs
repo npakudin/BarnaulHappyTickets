@@ -272,11 +272,43 @@ namespace ConsoleApp1
 
             var startTime = DateTime.Now;
             var fileInfo = new FileInfo(filename);
-            
-            // TODO: add failover (for continue work after program stop)
+            var workingFileMode = FileMode.Append;
+
+            // failover (for continue work after program stop)
             // if the last valuable line starts with number, continue from 1st number in the line
+            if (fileInfo.Exists && fileInfo.Length > 0)
+            {
+                using (var sr = fileInfo.OpenRead())
+                {
+                    var bufSize = Math.Min(100, fileInfo.Length);
+                    var buf = new byte[bufSize];
+                    
+                    sr.Seek(-buf.Length, SeekOrigin.End);
+                    sr.Read(buf, 0, buf.Length);
+                    
+                    var str = Encoding.ASCII.GetString(buf);
+                    var lines = str.Split("\n");
+                    var lastLine = lines.Last(x => x.Length > 0);
+                    var beginToken = lastLine.Split(' ', '\t', '\r').First();
+                    if (beginToken.StartsWith("real"))
+                    {
+                        // new run
+                        workingFileMode = FileMode.Create;
+                    }
+                    else
+                    {
+                        if (int.TryParse(beginToken, out var lastValue))
+                        {
+                            // continue previous run
+                            from = lastValue; // don't use "lastValue + 1" - line can be uncompleted!
+                            workingFileMode = FileMode.Append;
+                        }
+                    }
+                }
+            }
+
             
-            using (var sw = new StreamWriter(fileInfo.Open(FileMode.Append)))
+            using (var sw = new StreamWriter(fileInfo.Open(workingFileMode)))
             {
                 sw.WriteLine($"=============================");
                 for (int i = from; i <= to; i++)
@@ -319,6 +351,7 @@ namespace ConsoleApp1
             }
         }
         
+        // signsNumber - not digits - places between them
         public static void Problem10598(string filename, int signsNumber)
         {
             var sb = new StringBuilder();
@@ -326,8 +359,6 @@ namespace ConsoleApp1
             {
                 sb.Append(i);
             }
-            
-            //const int signsNumber = 8; // not digits - places between them
             
             long totalExpr = 0;
             long matchedExpr = 0;
