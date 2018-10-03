@@ -225,6 +225,29 @@ namespace ConsoleApp1
             return _str[index] - 48;
         }
 
+        private readonly Dictionary<int, Dictionary<long, int>> _cache = new Dictionary<int, Dictionary<long, int>>();
+        
+        private void CacheSave(int rightN, int rightBegin, long leftValue)
+        {
+            var key = rightN << 16 + rightBegin;
+            if (!_cache.TryGetValue(key, out var subCache))
+            {
+                subCache = new Dictionary<long, int>();
+            }
+
+            subCache[leftValue] = 0;
+        }
+        
+        private bool IsCacheContains(int rightN, int rightBegin, long leftValue)
+        {
+            var key = rightN << 16 + rightBegin;
+            if (!_cache.TryGetValue(key, out var subCache))
+            {
+                subCache = new Dictionary<long, int>();
+            }
+            return subCache.ContainsKey(leftValue);
+        }
+
         public IEnumerable<Node> Braces(int n, int begin)
         {
             if (n == 0)
@@ -238,7 +261,16 @@ namespace ConsoleApp1
                 var lefts = Braces(i, begin);
                 foreach (var left in lefts)
                 {
-                    var rights = Braces(n - i - 1, begin + i + 1);
+                    var rightN = n - i - 1;
+                    var rightBegin = begin + i + 1;
+                    var leftValue = (long)Math.Round(left.Evaluate() * 1000_000_000);
+
+                    if (IsCacheContains(rightN, rightBegin, leftValue))
+                    {
+                        continue;
+                    }
+                    
+                    var rights = Braces(rightN, rightBegin);
                     foreach (var right in rights)
                     {
                         foreach (var value in Enum.GetValues(typeof(Operation)))
@@ -289,6 +321,7 @@ namespace ConsoleApp1
                             }
                         }
                     }
+                    CacheSave(rightN, rightBegin, leftValue);
                 }
             }
         }
@@ -494,7 +527,7 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var signsNumber = 4;
+            var signsNumber = 6;
             Problem10598($"res-{signsNumber}.txt", signsNumber);
 
 //            var from = 000_000;
