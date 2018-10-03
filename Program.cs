@@ -58,6 +58,7 @@ namespace ConsoleApp1
     {
         public Node Left;
         public Node Right;
+        public bool IsNegative;
 
         public abstract double Evaluate();
 
@@ -75,6 +76,11 @@ namespace ConsoleApp1
         // Don't create too much strings and StringBuilders, use single StringBuilder
         private void PrintTo(StringBuilder sb)
         {
+            if (IsNegative)
+            {
+                sb.Append("(-");
+            }
+
             if (Left != null)
             {
                 sb.Append("(");
@@ -86,6 +92,11 @@ namespace ConsoleApp1
             if (Right != null)
             {
                 Right.PrintTo(sb);
+                sb.Append(")");
+            }
+            
+            if (IsNegative)
+            {
                 sb.Append(")");
             }
         }
@@ -104,7 +115,7 @@ namespace ConsoleApp1
 
         public override double Evaluate()
         {
-            return Number;
+            return Number * (IsNegative ? -1 : 1);
         }
 
         public override int GetConcatLength()
@@ -135,7 +146,7 @@ namespace ConsoleApp1
             if (!_isCached)
             {
                 _isCached = true;
-                _cached = InnerEvaluate();
+                _cached = InnerEvaluate() * (IsNegative ? -1 : 1);;
             }
 
             return _cached;
@@ -219,6 +230,7 @@ namespace ConsoleApp1
             if (n == 0)
             {
                 yield return new NumberNode {Number = DigitByIndex(begin)};
+                yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
             }
 
             for (var i = 0; i < n; i++)
@@ -232,7 +244,7 @@ namespace ConsoleApp1
                         foreach (var value in Enum.GetValues(typeof(Operation)))
                         {
                             if ((Operation) value == Operation.Concat &&
-                                !(left.IsConcatenable() && right.IsConcatenable()))
+                                !(left.IsConcatenable() && right.IsConcatenable() && !right.IsNegative))
                             {
                                 // cannot concat 1|(2+3)
                                 continue;
@@ -252,8 +264,8 @@ namespace ConsoleApp1
                                 continue;
                             }
 
-                            yield return new OperationNode
-                                {Left = left, Right = right, Operation = (Operation) value};
+                            yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
+                            yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value, IsNegative = true};
                         }
                     }
                 }
@@ -461,14 +473,14 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            //var signsNumber = 6;
-            //Problem10598($"res-{signsNumber}.txt", signsNumber);
+            var signsNumber = 4;
+            Problem10598($"res-{signsNumber}.txt", signsNumber);
 
-            var from = 000_000;
-            var to = 000_999;
-            var fromStr = from.ToString("000000");
-            var toStr = to.ToString("000000");
-            BarnaulHappyTickets($"barnaul-{fromStr}-{toStr}.txt", from, to);
+//            var from = 000_000;
+//            var to = 000_010;
+//            var fromStr = from.ToString("000000");
+//            var toStr = to.ToString("000000");
+//            BarnaulHappyTickets($"barnaul-{fromStr}-{toStr}.txt", from, to);
         }
     }
 }
