@@ -146,7 +146,7 @@ namespace ConsoleApp1
             if (!_isCached)
             {
                 _isCached = true;
-                _cached = InnerEvaluate() * (IsNegative ? -1 : 1);;
+                _cached = InnerEvaluate() * (IsNegative ? -1 : 1);
             }
 
             return _cached;
@@ -264,8 +264,29 @@ namespace ConsoleApp1
                                 continue;
                             }
 
+                            // don't return values which are already calculated
+                            // -(a + b) = (-a) + (-b)
+                            // -(a - b) = (-a) + b
+                            // -(a * b) = (-a) * b = a * (-b)
+                            // -(a / b) = (-a) / b = -a / (-b)
+                            if ((Operation) value == Operation.Multiply || (Operation) value == Operation.Div)
+                            {
+                                if (right.IsNegative)
+                                {
+                                    // a * b = (-a) * (-b)
+                                    // a / b = (-a) / (-b)
+
+                                    // (-a) * b = a * (-b)
+                                    // (-a) / b = -a / (-b)
+                                    continue;
+                                }
+                            }
                             yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
-                            yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value, IsNegative = true};
+                            
+                            if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
+                            {
+                                yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value, IsNegative = true};
+                            }
                         }
                     }
                 }
