@@ -71,7 +71,7 @@ namespace ConsoleApp1
 
         public abstract bool IsConcatenable();
 
-        public abstract string GetPrintValue();
+        protected abstract string GetPrintValue();
 
         // Don't create too much strings and StringBuilders, use single StringBuilder
         private void PrintTo(StringBuilder sb)
@@ -128,7 +128,7 @@ namespace ConsoleApp1
             return true;
         }
 
-        public override string GetPrintValue()
+        protected override string GetPrintValue()
         {
             return Number.ToString();
         }
@@ -178,7 +178,7 @@ namespace ConsoleApp1
             }
         }
 
-        public override string GetPrintValue()
+        protected override string GetPrintValue()
         {
             switch (Operation)
             {
@@ -213,14 +213,14 @@ namespace ConsoleApp1
     public class BracesEnumerator
     {
         public const double Epsilon = 1.0E-20;
-        private string _str;
+        private readonly string _str;
 
         public BracesEnumerator(string str)
         {
             _str = str;
         }
 
-        public int DigitByIndex(int index)
+        private int DigitByIndex(int index)
         {
             return _str[index] - 48;
         }
@@ -248,80 +248,108 @@ namespace ConsoleApp1
             return subCache.ContainsKey(leftValue);
         }
 
-        public IEnumerable<Node> Braces(int n, int begin)
+        public IEnumerable<Node> Braces(int n, int begin, bool prohibitNegative)
         {
             if (n == 0)
             {
                 yield return new NumberNode {Number = DigitByIndex(begin)};
-                yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
+                //if (!prohibitNegative)
+                {
+                    yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
+                }
             }
 
             for (var i = 0; i < n; i++)
             {
-                var lefts = Braces(i, begin);
-                foreach (var left in lefts)
+                var rights = Braces(n - i - 1, begin + i + 1, false);
+                foreach (var right in rights)
                 {
-                    var rightN = n - i - 1;
-                    var rightBegin = begin + i + 1;
-                    var leftValue = (long)Math.Round(left.Evaluate() * 1000_000_000);
-
-                    if (IsCacheContains(rightN, rightBegin, leftValue))
-                    {
-                        continue;
-                    }
+//                    // if left tree has the same value and right trees generator have the same parameters
+//                    // don't generate right trees
+//                    // improve performance -17%
+//                    var rightN = n - i - 1;
+//                    var rightBegin = begin + i + 1;
+//                    // not completely correct - loosing data here
+//                    // supposing for integer result it's OK
+//                    var leftValue = (long)Math.Round(left.Evaluate() * 1000_000_000);
+//
+//                    if (IsCacheContains(rightN, rightBegin, leftValue))
+//                    {
+//                        continue;
+//                    }
                     
-                    var rights = Braces(rightN, rightBegin);
-                    foreach (var right in rights)
+                    foreach (var value in Enum.GetValues(typeof(Operation)))
                     {
-                        foreach (var value in Enum.GetValues(typeof(Operation)))
+                        if ((Operation) value == Operation.Concat && (right.IsNegative || !right.IsConcatenable()))
                         {
-                            if ((Operation) value == Operation.Concat &&
-                                !(left.IsConcatenable() && right.IsConcatenable() && !right.IsNegative))
+                            // cannot concat 1|(2+3)
+                            // cannot concat 1|(-2)
+                            continue;
+                        }
+                                                    
+                        if ((Operation) value == Operation.Div && Math.Abs(right.Evaluate()) <= double.Epsilon)
+                        {
+                            // cannot divide by zero
+                            continue;
+                        }
+
+                        // improve performance ~2 times for 4, 5 and 6 digits
+                        // don't return values which are already calculated
+                        if ((Operation) value == Operation.Multiply || (Operation) value == Operation.Div)
+                        {
+                            if (right.IsNegative)
+                            {
+                                // a * b = (-a) * (-b)
+                                // a / b = (-a) / (-b)
+
+                                // (-a) * b = a * (-b)
+                                // (-a) / b = -a / (-b)
+                                //continue;
+                            }
+
+//                                // no performance effect
+//                                if (right is OperationNode opRight)
+//                                {
+//                                    if (opRight.Operation == Operation.Multiply || opRight.Operation == Operation.Div)
+//                                    {
+//                                        if (opRight.Left.IsNegative || opRight.Right.IsNegative)
+//                                        {
+//                                            continue;
+//                                        }
+//                                    }
+//                                }
+                        }
+                        
+                        var prohibitLeftNegative = false;
+
+                        var lefts = Braces(i, begin, prohibitLeftNegative);
+                        foreach (var left in lefts)
+                        {
+                            if ((Operation) value == Operation.Concat && !left.IsConcatenable())
                             {
                                 // cannot concat 1|(2+3)
                                 continue;
                             }
 
-                            if ((Operation) value == Operation.Power &&
-                                Math.Abs(left.Evaluate()) <= Epsilon && Math.Abs(right.Evaluate()) <= Epsilon)
+                            if ((Operation) value == Operation.Power && Math.Abs(left.Evaluate()) <= double.Epsilon && Math.Abs(right.Evaluate()) <= double.Epsilon)
                             {
                                 // cannot calculate 0^0
                                 continue;
                             }
-                            
-                            if ((Operation) value == Operation.Div &&
-                                Math.Abs(right.Evaluate()) <= double.Epsilon)
-                            {
-                                // cannot divide by zero
-                                continue;
-                            }
-
-                            // don't return values which are already calculated
-                            // -(a + b) = (-a) + (-b)
-                            // -(a - b) = (-a) + b
-                            // -(a * b) = (-a) * b = a * (-b)
-                            // -(a / b) = (-a) / b = -a / (-b)
-                            if ((Operation) value == Operation.Multiply || (Operation) value == Operation.Div)
-                            {
-                                if (right.IsNegative)
-                                {
-                                    // a * b = (-a) * (-b)
-                                    // a / b = (-a) / (-b)
-
-                                    // (-a) * b = a * (-b)
-                                    // (-a) / b = -a / (-b)
-                                    continue;
-                                }
-                            }
                             yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
                             
-                            if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
+                            // improve performance ~10 times for 4, 5 and 6 digits
+                            //if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
                             {
+                                // -(a + b) = (-a) + (-b)
+                                // -(a - b) = (-a) + b
+                                // -(a * b) = (-a) * b = a * (-b)
+                                // -(a / b) = (-a) / b = -a / (-b)
                                 yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value, IsNegative = true};
                             }
                         }
                     }
-                    CacheSave(rightN, rightBegin, leftValue);
+                    //CacheSave(rightN, rightBegin, leftValue);
                 }
             }
         }
@@ -338,9 +366,9 @@ namespace ConsoleApp1
 
             var startTime = DateTime.Now;
             var fileInfo = new FileInfo(filename);
-            var workingFileMode = FileMode.Append;
+            var workingFileMode = FileMode.Create;
 
-            // failover (for continue work after program stop)
+            // fail over (for continue work after program stop)
             // if the last valuable line starts with number, continue from 1st number in the line
             if (fileInfo.Exists && fileInfo.Length > 0)
             {
@@ -376,11 +404,11 @@ namespace ConsoleApp1
             
             using (var sw = new StreamWriter(fileInfo.Open(workingFileMode)))
             {
-                sw.WriteLine($"=============================");
+                sw.WriteLine("=============================");
                 for (int i = from; i <= to; i++)
                 {
                     var bracesEnumerator = new BracesEnumerator(i.ToString("000000"));
-                    var trees = bracesEnumerator.Braces(signsNumber, 0);
+                    var trees = bracesEnumerator.Braces(signsNumber, 0, false);
                     foreach (var tree in trees)
                     {
                         totalExpr++;
@@ -418,7 +446,7 @@ namespace ConsoleApp1
         }
         
         // signsNumber - not digits - places between them
-        public static void Problem10598(string filename, int signsNumber)
+        private static void Problem10598(string filename, int signsNumber)
         {
             var sb = new StringBuilder();
             for (var i = 1; i <= signsNumber + 1; i++)
@@ -435,9 +463,9 @@ namespace ConsoleApp1
             var fileInfo = new FileInfo(filename);
             using (var sw = new StreamWriter(fileInfo.Open(FileMode.Create)))
             {
-                sw.WriteLine($"=============================");
+                sw.WriteLine("=============================");
                 var bracesEnumerator = new BracesEnumerator(sb.ToString());
-                var trees = bracesEnumerator.Braces(signsNumber, 0);
+                var trees = bracesEnumerator.Braces(signsNumber, 0, false);
                 foreach (var tree in trees)
                 {
                     totalExpr++;
@@ -449,20 +477,20 @@ namespace ConsoleApp1
                     if (Math.Abs(res - Math.Round(res)) > BracesEnumerator.Epsilon)
                     {
                         // ignore with fraction part
-                        continue;
+                        //continue;
                     }
 
                     if (Math.Abs(res) > 20_000)
                     {
                         // ignore too large
-                        continue;
+                        //continue;
                     }
 
                     if (Math.Abs(res) < BracesEnumerator.Epsilon)
                     {
                         // ignore numbers like 1.0E-117
                         // NOTE: zero is ignored too! 
-                        continue;
+                        //continue;
                     }
 
                     if (!map.ContainsKey(res))
@@ -496,7 +524,7 @@ namespace ConsoleApp1
 
                 // print keys in sorted order
                 {
-                    sw.WriteLine($"-------- The same sorted --------");
+                    sw.WriteLine("-------- The same sorted --------");
                     var keys = map.Keys.ToArray();
                     Array.Sort(keys);
 
@@ -527,11 +555,11 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var signsNumber = 6;
+            var signsNumber = 4;
             Problem10598($"res-{signsNumber}.txt", signsNumber);
 
 //            var from = 000_000;
-//            var to = 000_010;
+//            var to = 100_000;
 //            var fromStr = from.ToString("000000");
 //            var toStr = to.ToString("000000");
 //            BarnaulHappyTickets($"barnaul-{fromStr}-{toStr}.txt", from, to);
