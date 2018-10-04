@@ -225,23 +225,23 @@ namespace ConsoleApp1
             return _str[index] - 48;
         }
 
-        private readonly Dictionary<int, Dictionary<long, int>> _cache = new Dictionary<int, Dictionary<long, int>>();
+        private readonly Dictionary<int, Dictionary<double, Node>> _cache = new Dictionary<int, Dictionary<double, Node>>();
         
-        private void CacheSave(int rightN, int rightBegin, long value)
+        private void CacheSave(int rightN, int rightBegin, double value, Node node)
         {
-            var key = rightN << 16 + rightBegin;
+            var key = (rightN << 16) | rightBegin;
             if (!_cache.TryGetValue(key, out var subCache))
             {
-                subCache = new Dictionary<long, int>();
+                subCache = new Dictionary<double, Node>();
                 _cache[key] = subCache;
             }
 
-            subCache[value] = 0;
+            subCache[value] = node;
         }
         
-        private bool IsCacheContains(int rightN, int rightBegin, long value)
+        private bool IsCacheContains(int rightN, int rightBegin, double value)
         {
-            var key = rightN << 16 + rightBegin;
+            var key = (rightN << 16) | rightBegin;
             if (!_cache.TryGetValue(key, out var subCache))
             {
                 return false;
@@ -251,7 +251,7 @@ namespace ConsoleApp1
             return false;
         }
 
-        public IEnumerable<Node> Braces(int n, int begin, bool prohibitNegative)
+        public IEnumerable<Node> Braces(int n, int begin, bool prohibitNegative, int level, int address)
         {
             if (n == 0)
             {
@@ -264,22 +264,26 @@ namespace ConsoleApp1
 
             for (var i = 0; i < n; i++)
             {
-                var rights = Braces(n - i - 1, begin + i + 1, false);
+                var rights = Braces(n - i - 1, begin + i + 1, false, level + 1, address | (1 << (level + 1)));
                 foreach (var right in rights)
                 {
                     // if right tree has the same value and generator have the same parameters
                     // don't generate right trees
                     // improve performance -17%
-                    var rightN = n - i - 1;
-                    var rightBegin = begin + i + 1;
+//                    var rightN = n - i - 1;
+//                    var rightBegin = begin + i + 1;
+                    var rightN = level;
+                    var rightBegin = address;
                     // not completely correct - loosing data here
                     // supposing for integer result it's OK
-                    var rightValue = (long)Math.Round(right.Evaluate() * 1000_000_000);
+                    var rightValue = right.Evaluate();
 
                     if (IsCacheContains(rightN, rightBegin, rightValue))
                     {
-                        continue;
+                        //continue;
                     }
+
+                    var canSave = true;
                     
                     foreach (var value in Enum.GetValues(typeof(Operation)))
                     {
@@ -287,12 +291,14 @@ namespace ConsoleApp1
                         {
                             // cannot concat 1|(2+3)
                             // cannot concat 1|(-2)
+                            canSave = false;
                             continue;
                         }
                                                     
                         if ((Operation) value == Operation.Div && Math.Abs(right.Evaluate()) <= double.Epsilon)
                         {
                             // cannot divide by zero
+                            canSave = false;
                             continue;
                         }
 
@@ -307,6 +313,7 @@ namespace ConsoleApp1
 
                                 // (-a) * b = a * (-b)
                                 // (-a) / b = -a / (-b)
+                                canSave = false;
                                 continue;
                             }
 
@@ -325,18 +332,20 @@ namespace ConsoleApp1
                         
                         var prohibitLeftNegative = false;
 
-                        var lefts = Braces(i, begin, prohibitLeftNegative);
+                        var lefts = Braces(i, begin, prohibitLeftNegative,  level + 1, address | (0 << (level + 1)));
                         foreach (var left in lefts)
                         {
                             if ((Operation) value == Operation.Concat && !left.IsConcatenable())
                             {
                                 // cannot concat 1|(2+3)
+                                canSave = false;
                                 continue;
                             }
 
                             if ((Operation) value == Operation.Power && Math.Abs(left.Evaluate()) <= double.Epsilon && Math.Abs(right.Evaluate()) <= double.Epsilon)
                             {
                                 // cannot calculate 0^0
+                                canSave = false;
                                 continue;
                             }
                             yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
@@ -352,7 +361,11 @@ namespace ConsoleApp1
                             }
                         }
                     }
-                    CacheSave(rightN, rightBegin, rightValue);
+
+                    //if (canSave)
+                    {
+                        CacheSave(rightN, rightBegin, rightValue, right);
+                    }
                 }
             }
         }
@@ -362,7 +375,7 @@ namespace ConsoleApp1
     {
         public static void BarnaulHappyTickets(string filename, int from, int to)
         {
-            const int signsNumber = 5; // not digits - places between them
+            const int signsNumber = 3; // not digits - places between them
 
             long totalExpr = 0;
             long matchedExpr = 0;
@@ -411,7 +424,7 @@ namespace ConsoleApp1
                 for (int i = from; i <= to; i++)
                 {
                     var bracesEnumerator = new BracesEnumerator(i.ToString("000000"));
-                    var trees = bracesEnumerator.Braces(signsNumber, 0, false);
+                    var trees = bracesEnumerator.Braces(signsNumber, 0, false, 0, 0);
                     foreach (var tree in trees)
                     {
                         totalExpr++;
@@ -468,7 +481,7 @@ namespace ConsoleApp1
             {
                 sw.WriteLine("=============================");
                 var bracesEnumerator = new BracesEnumerator(sb.ToString());
-                var trees = bracesEnumerator.Braces(signsNumber, 0, false);
+                var trees = bracesEnumerator.Braces(signsNumber, 0, false, 0, 0);
                 foreach (var tree in trees)
                 {
                     totalExpr++;
