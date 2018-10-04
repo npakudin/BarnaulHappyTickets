@@ -227,25 +227,28 @@ namespace ConsoleApp1
 
         private readonly Dictionary<int, Dictionary<long, int>> _cache = new Dictionary<int, Dictionary<long, int>>();
         
-        private void CacheSave(int rightN, int rightBegin, long leftValue)
+        private void CacheSave(int rightN, int rightBegin, long value)
         {
             var key = rightN << 16 + rightBegin;
             if (!_cache.TryGetValue(key, out var subCache))
             {
                 subCache = new Dictionary<long, int>();
+                _cache[key] = subCache;
             }
 
-            subCache[leftValue] = 0;
+            subCache[value] = 0;
         }
         
-        private bool IsCacheContains(int rightN, int rightBegin, long leftValue)
+        private bool IsCacheContains(int rightN, int rightBegin, long value)
         {
             var key = rightN << 16 + rightBegin;
             if (!_cache.TryGetValue(key, out var subCache))
             {
-                subCache = new Dictionary<long, int>();
+                return false;
             }
-            return subCache.ContainsKey(leftValue);
+            var isContains = subCache.ContainsKey(value);
+            //return isContains;
+            return false;
         }
 
         public IEnumerable<Node> Braces(int n, int begin, bool prohibitNegative)
@@ -264,19 +267,19 @@ namespace ConsoleApp1
                 var rights = Braces(n - i - 1, begin + i + 1, false);
                 foreach (var right in rights)
                 {
-//                    // if left tree has the same value and right trees generator have the same parameters
-//                    // don't generate right trees
-//                    // improve performance -17%
-//                    var rightN = n - i - 1;
-//                    var rightBegin = begin + i + 1;
-//                    // not completely correct - loosing data here
-//                    // supposing for integer result it's OK
-//                    var leftValue = (long)Math.Round(left.Evaluate() * 1000_000_000);
-//
-//                    if (IsCacheContains(rightN, rightBegin, leftValue))
-//                    {
-//                        continue;
-//                    }
+                    // if right tree has the same value and generator have the same parameters
+                    // don't generate right trees
+                    // improve performance -17%
+                    var rightN = n - i - 1;
+                    var rightBegin = begin + i + 1;
+                    // not completely correct - loosing data here
+                    // supposing for integer result it's OK
+                    var rightValue = (long)Math.Round(right.Evaluate() * 1000_000_000);
+
+                    if (IsCacheContains(rightN, rightBegin, rightValue))
+                    {
+                        continue;
+                    }
                     
                     foreach (var value in Enum.GetValues(typeof(Operation)))
                     {
@@ -304,7 +307,7 @@ namespace ConsoleApp1
 
                                 // (-a) * b = a * (-b)
                                 // (-a) / b = -a / (-b)
-                                //continue;
+                                continue;
                             }
 
 //                                // no performance effect
@@ -339,7 +342,7 @@ namespace ConsoleApp1
                             yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
                             
                             // improve performance ~10 times for 4, 5 and 6 digits
-                            //if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
+                            if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
                             {
                                 // -(a + b) = (-a) + (-b)
                                 // -(a - b) = (-a) + b
@@ -349,7 +352,7 @@ namespace ConsoleApp1
                             }
                         }
                     }
-                    //CacheSave(rightN, rightBegin, leftValue);
+                    CacheSave(rightN, rightBegin, rightValue);
                 }
             }
         }
@@ -520,6 +523,8 @@ namespace ConsoleApp1
                     $"total {totalExpr} in {diffTime.TotalMilliseconds} => {totalExpr / diffTime.TotalMilliseconds} records/ms");
                 Console.WriteLine(
                     $"real {matchedExpr} in {diffTime.TotalMilliseconds} => {matchedExpr / diffTime.TotalMilliseconds} records/ms");
+                Console.WriteLine(
+                    $"total/real {(double)totalExpr / matchedExpr}");
 
 
                 // print keys in sorted order
