@@ -125,7 +125,7 @@ namespace ConsoleApp1
 
         public override bool IsConcatenable()
         {
-            return true;
+            return !IsNegative;
         }
 
         protected override string GetPrintValue()
@@ -201,7 +201,7 @@ namespace ConsoleApp1
 
         public override bool IsConcatenable()
         {
-            return Operation == Operation.Concat && Left.IsConcatenable() && Right.IsConcatenable();
+            return Operation == Operation.Concat && Left.IsConcatenable() && Right.IsConcatenable() && !IsNegative;
         }
 
         public override int GetConcatLength()
@@ -573,7 +573,7 @@ namespace ConsoleApp1
 
         public static void Main(string[] args)
         {
-            var signsNumber = 4;
+            var signsNumber = 5;
             Problem10598($"res-{signsNumber}.txt", signsNumber);
 
 //            var from = 000_000;
