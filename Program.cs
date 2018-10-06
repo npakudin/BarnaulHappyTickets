@@ -215,10 +215,12 @@ namespace ConsoleApp1
     {
         public const double Epsilon = 1.0E-20;
         private readonly string _str;
+        private readonly bool _allowNegative;
 
-        public BracesEnumerator(string str)
+        public BracesEnumerator(string str, bool allowNegative = true)
         {
             _str = str;
+            _allowNegative = allowNegative;
         }
 
         private int DigitByIndex(int index)
@@ -232,7 +234,10 @@ namespace ConsoleApp1
             if (n == 0)
             {
                 yield return new NumberNode {Number = DigitByIndex(begin)};
-                yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
+                if (_allowNegative)
+                {
+                    yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
+                }
             }
 
             for (var i = 0; i < n; i++)
@@ -286,15 +291,18 @@ namespace ConsoleApp1
                                 continue;
                             }
                             yield return new OperationNode {Left = left, Right = right, Operation = value};
-                            
-                            // improve performance ~10 times for 4, 5 and 6 digits
-                            if (value == Operation.Power || value == Operation.Concat)
+
+                            if (_allowNegative)
                             {
-                                // -(a + b) = (-a) + (-b)
-                                // -(a - b) = (-a) + b
-                                // -(a * b) = (-a) * b = a * (-b)
-                                // -(a / b) = (-a) / b = -a / (-b)
-                                yield return new OperationNode {Left = left, Right = right, Operation = value, IsNegative = true};
+                                // improve performance ~10 times for 4, 5 and 6 digits
+                                if (value == Operation.Power || value == Operation.Concat)
+                                {
+                                    // -(a + b) = (-a) + (-b)
+                                    // -(a - b) = (-a) + b
+                                    // -(a * b) = (-a) * b = a * (-b)
+                                    // -(a / b) = (-a) / b = -a / (-b)
+                                    yield return new OperationNode {Left = left, Right = right, Operation = value, IsNegative = true};
+                                }
                             }
                         }
                     }
@@ -408,7 +416,7 @@ namespace ConsoleApp1
         }
         
         // signsNumber - not digits - places between them
-        private static void Problem10598(string filename, int signsNumber)
+        private static void Problem10598(string filename, int signsNumber, bool allowNegative = true)
         {
             var sb = new StringBuilder();
             for (var i = 1; i <= signsNumber + 1; i++)
@@ -426,7 +434,7 @@ namespace ConsoleApp1
             using (var sw = new StreamWriter(fileInfo.Open(FileMode.Create)))
             {
                 sw.WriteLine("=============================");
-                var bracesEnumerator = new BracesEnumerator(sb.ToString());
+                var bracesEnumerator = new BracesEnumerator(sb.ToString(), allowNegative);
                 var trees = bracesEnumerator.Braces(signsNumber, 0);
                 foreach (var tree in trees)
                 {
@@ -520,7 +528,7 @@ namespace ConsoleApp1
         public static async Task Main(string[] args)
         {
             var signsNumber = 5;
-            Problem10598($"res-{signsNumber}.txt", signsNumber);
+            Problem10598($"res-{signsNumber}.txt", signsNumber, allowNegative: false);
 
 //            await MultithreadBarnaulHappyTickets(912, 946, 3);
             
