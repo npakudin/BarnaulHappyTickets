@@ -226,86 +226,39 @@ namespace ConsoleApp1
             return _str[index] - 48;
         }
 
-        private readonly Dictionary<int, Dictionary<double, Node>> _cache = new Dictionary<int, Dictionary<double, Node>>();
-        
-        private void CacheSave(int rightN, int rightBegin, double value, Node node)
-        {
-            var key = (rightN << 16) | rightBegin;
-            if (!_cache.TryGetValue(key, out var subCache))
-            {
-                subCache = new Dictionary<double, Node>();
-                _cache[key] = subCache;
-            }
 
-            subCache[value] = node;
-        }
-        
-        private bool IsCacheContains(int rightN, int rightBegin, double value)
-        {
-            var key = (rightN << 16) | rightBegin;
-            if (!_cache.TryGetValue(key, out var subCache))
-            {
-                return false;
-            }
-            var isContains = subCache.ContainsKey(value);
-            //return isContains;
-            return false;
-        }
-
-        public IEnumerable<Node> Braces(int n, int begin, bool prohibitNegative, int level, int address)
+        public IEnumerable<Node> Braces(int n, int begin)
         {
             if (n == 0)
             {
                 yield return new NumberNode {Number = DigitByIndex(begin)};
-                //if (!prohibitNegative)
-                {
-                    yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
-                }
+                yield return new NumberNode {Number = DigitByIndex(begin), IsNegative = true};
             }
 
             for (var i = 0; i < n; i++)
             {
-                var rights = Braces(n - i - 1, begin + i + 1, false, level + 1, address | (1 << (level + 1)));
+                var rights = Braces(n - i - 1, begin + i + 1);
                 foreach (var right in rights)
                 {
-                    // if right tree has the same value and generator have the same parameters
-                    // don't generate right trees
-                    // improve performance -17%
-//                    var rightN = n - i - 1;
-//                    var rightBegin = begin + i + 1;
-                    var rightN = level;
-                    var rightBegin = address;
-                    // not completely correct - loosing data here
-                    // supposing for integer result it's OK
-                    var rightValue = right.Evaluate();
-
-                    if (IsCacheContains(rightN, rightBegin, rightValue))
+                    foreach (var val in Enum.GetValues(typeof(Operation)))
                     {
-                        //continue;
-                    }
-
-                    var canSave = true;
-                    
-                    foreach (var value in Enum.GetValues(typeof(Operation)))
-                    {
-                        if ((Operation) value == Operation.Concat && (right.IsNegative || !right.IsConcatenable()))
+                        var value = (Operation) val;
+                        if (value == Operation.Concat && (right.IsNegative || !right.IsConcatenable()))
                         {
                             // cannot concat 1|(2+3)
                             // cannot concat 1|(-2)
-                            canSave = false;
                             continue;
                         }
                                                     
-                        if ((Operation) value == Operation.Div && Math.Abs(right.Evaluate()) <= double.Epsilon)
+                        if (value == Operation.Div && Math.Abs(right.Evaluate()) <= double.Epsilon)
                         {
                             // cannot divide by zero
-                            canSave = false;
                             continue;
                         }
 
                         // improve performance ~2 times for 4, 5 and 6 digits
                         // don't return values which are already calculated
-                        if ((Operation) value == Operation.Multiply || (Operation) value == Operation.Div)
+                        if (value == Operation.Multiply || value == Operation.Div)
                         {
                             if (right.IsNegative)
                             {
@@ -314,58 +267,36 @@ namespace ConsoleApp1
 
                                 // (-a) * b = a * (-b)
                                 // (-a) / b = -a / (-b)
-                                canSave = false;
                                 continue;
                             }
-
-//                                // no performance effect
-//                                if (right is OperationNode opRight)
-//                                {
-//                                    if (opRight.Operation == Operation.Multiply || opRight.Operation == Operation.Div)
-//                                    {
-//                                        if (opRight.Left.IsNegative || opRight.Right.IsNegative)
-//                                        {
-//                                            continue;
-//                                        }
-//                                    }
-//                                }
                         }
                         
-                        var prohibitLeftNegative = false;
-
-                        var lefts = Braces(i, begin, prohibitLeftNegative,  level + 1, address | (0 << (level + 1)));
+                        var lefts = Braces(i, begin);
                         foreach (var left in lefts)
                         {
-                            if ((Operation) value == Operation.Concat && !left.IsConcatenable())
+                            if (value == Operation.Concat && !left.IsConcatenable())
                             {
                                 // cannot concat 1|(2+3)
-                                canSave = false;
                                 continue;
                             }
 
-                            if ((Operation) value == Operation.Power && Math.Abs(left.Evaluate()) <= double.Epsilon && Math.Abs(right.Evaluate()) <= double.Epsilon)
+                            if (value == Operation.Power && Math.Abs(left.Evaluate()) <= double.Epsilon && Math.Abs(right.Evaluate()) <= double.Epsilon)
                             {
                                 // cannot calculate 0^0
-                                canSave = false;
                                 continue;
                             }
-                            yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value};
+                            yield return new OperationNode {Left = left, Right = right, Operation = value};
                             
                             // improve performance ~10 times for 4, 5 and 6 digits
-                            if ((Operation) value == Operation.Power || (Operation) value == Operation.Concat)
+                            if (value == Operation.Power || value == Operation.Concat)
                             {
                                 // -(a + b) = (-a) + (-b)
                                 // -(a - b) = (-a) + b
                                 // -(a * b) = (-a) * b = a * (-b)
                                 // -(a / b) = (-a) / b = -a / (-b)
-                                yield return new OperationNode {Left = left, Right = right, Operation = (Operation) value, IsNegative = true};
+                                yield return new OperationNode {Left = left, Right = right, Operation = value, IsNegative = true};
                             }
                         }
-                    }
-
-                    //if (canSave)
-                    {
-                        CacheSave(rightN, rightBegin, rightValue, right);
                     }
                 }
             }
@@ -439,7 +370,7 @@ namespace ConsoleApp1
                 for (int i = from; i <= to; i++)
                 {
                     var bracesEnumerator = new BracesEnumerator(i.ToString("000000"));
-                    var trees = bracesEnumerator.Braces(signsNumber, 0, false, 0, 0);
+                    var trees = bracesEnumerator.Braces(signsNumber, 0);
                     foreach (var tree in trees)
                     {
                         totalExpr++;
@@ -496,7 +427,7 @@ namespace ConsoleApp1
             {
                 sw.WriteLine("=============================");
                 var bracesEnumerator = new BracesEnumerator(sb.ToString());
-                var trees = bracesEnumerator.Braces(signsNumber, 0, false, 0, 0);
+                var trees = bracesEnumerator.Braces(signsNumber, 0);
                 foreach (var tree in trees)
                 {
                     totalExpr++;
@@ -588,10 +519,10 @@ namespace ConsoleApp1
 
         public static async Task Main(string[] args)
         {
-//            var signsNumber = 5;
-//            Problem10598($"res-{signsNumber}.txt", signsNumber);
+            var signsNumber = 5;
+            Problem10598($"res-{signsNumber}.txt", signsNumber);
 
-            await MultithreadBarnaulHappyTickets(912, 946, 3);
+//            await MultithreadBarnaulHappyTickets(912, 946, 3);
             
 //            var from = 000_000;
 //            var to = 099_000;
