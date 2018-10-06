@@ -40,6 +40,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace ConsoleApp1
 {
@@ -373,9 +374,23 @@ namespace ConsoleApp1
 
     internal class Program
     {
-        public static void BarnaulHappyTickets(string filename, int from, int to)
+        public static async Task MultithreadBarnaulHappyTickets(int from, int to, int threadsNumber)
         {
-            const int signsNumber = 3; // not digits - places between them
+            var countPerThread = (to - from + threadsNumber - 1) / threadsNumber;
+            var tasks = Enumerable.Range(0, threadsNumber).Select(i => Task.Factory.StartNew(() =>
+            {
+                var threadFrom = from + i * countPerThread;
+                var threadTo = Math.Min(to, from + (i + 1) * countPerThread - 1);
+                var threadFromStr = threadFrom.ToString("000000");
+                var threadToStr = threadTo.ToString("000000");
+                BarnaulHappyTickets(threadFrom, threadTo, $"barnaul-{threadFromStr}-{threadToStr}.txt");
+            }));
+            await Task.WhenAll(tasks);
+        }
+        
+        public static void BarnaulHappyTickets(int from, int to, string filename)
+        {
+            const int signsNumber = 5; // not digits - places between them
 
             long totalExpr = 0;
             long matchedExpr = 0;
@@ -431,7 +446,7 @@ namespace ConsoleApp1
 
                         var res = tree.Evaluate();
 
-                        if (Math.Abs(res - 100) < 1.0E-1)
+                        if (Math.Abs(res - 100) < 1.0E-12)
                         {
                             matchedExpr++;
                             var treeStr = tree.ToString();
@@ -571,16 +586,18 @@ namespace ConsoleApp1
         }
         
 
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            var signsNumber = 5;
-            Problem10598($"res-{signsNumber}.txt", signsNumber);
+//            var signsNumber = 5;
+//            Problem10598($"res-{signsNumber}.txt", signsNumber);
 
+            await MultithreadBarnaulHappyTickets(912, 946, 3);
+            
 //            var from = 000_000;
-//            var to = 100_000;
+//            var to = 099_000;
 //            var fromStr = from.ToString("000000");
 //            var toStr = to.ToString("000000");
-//            BarnaulHappyTickets($"barnaul-{fromStr}-{toStr}.txt", from, to);
+//            BarnaulHappyTickets(from, to, $"barnaul-{fromStr}-{toStr}.txt");
         }
     }
 }
