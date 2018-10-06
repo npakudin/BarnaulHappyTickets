@@ -527,16 +527,10 @@ namespace ConsoleApp1
 
         public static async Task Main(string[] args)
         {
-            var signsNumber = 5;
-            Problem10598($"res-{signsNumber}.txt", signsNumber, allowNegative: false);
+//            var signsNumber = 5;
+//            Problem10598($"res-{signsNumber}.txt", signsNumber, allowNegative: false);
 
-//            await MultithreadBarnaulHappyTickets(912, 946, 3);
-            
-//            var from = 000_000;
-//            var to = 099_000;
-//            var fromStr = from.ToString("000000");
-//            var toStr = to.ToString("000000");
-//            BarnaulHappyTickets(from, to, $"barnaul-{fromStr}-{toStr}.txt");
+            await MultithreadBarnaulHappyTickets(from: 912, to: 946, threadsNumber: 3);
         }
     }
 }
