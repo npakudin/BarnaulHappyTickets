@@ -40,6 +40,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleApp1
@@ -313,13 +314,15 @@ namespace ConsoleApp1
 
     internal class Program
     {
-        public static async Task MultithreadBarnaulHappyTickets(int from, int to, int threadsNumber, bool allowNegative = true)
+        public static List<int> UnknownTickets = new List<int>();
+        
+        public static async Task MultithreadBarnaulHappyTickets(int fromIndex, int toIndex, int threadsNumber, bool allowNegative = true)
         {
-            var countPerThread = (to - from + threadsNumber - 1) / threadsNumber;
+            var countPerThread = (toIndex - fromIndex + threadsNumber - 1) / threadsNumber;
             var tasks = Enumerable.Range(0, threadsNumber).Select(i => Task.Factory.StartNew(() =>
             {
-                var threadFrom = from + i * countPerThread;
-                var threadTo = Math.Min(to, from + (i + 1) * countPerThread - 1);
+                var threadFrom = fromIndex + i * countPerThread;
+                var threadTo = Math.Min(toIndex, fromIndex + (i + 1) * countPerThread - 1);
                 var threadFromStr = threadFrom.ToString("000000");
                 var threadToStr = threadTo.ToString("000000");
                 BarnaulHappyTickets(threadFrom, threadTo, $"barnaul-{threadFromStr}-{threadToStr}.txt", allowNegative);
@@ -327,7 +330,7 @@ namespace ConsoleApp1
             await Task.WhenAll(tasks);
         }
         
-        public static void BarnaulHappyTickets(int from, int to, string filename, bool allowNegative = true)
+        public static void BarnaulHappyTickets(int fromIndex, int toIndex, string filename, bool allowNegative = true)
         {
             const int signsNumber = 5; // not digits - places between them
 
@@ -340,34 +343,19 @@ namespace ConsoleApp1
 
             // fail over (for continue work after program stop)
             // if the last valuable line starts with number, continue from 1st number in the line
-            if (fileInfo.Exists && fileInfo.Length > 0)
+            var failoverFileInfo = new FileInfo($"lock-index-{fromIndex}-{toIndex}.txt");
+            if (failoverFileInfo.Exists && failoverFileInfo.Length > 0)
             {
-                using (var sr = fileInfo.OpenRead())
+                using (var sr = new StreamReader(failoverFileInfo.Name))
                 {
-                    var bufSize = Math.Min(100, fileInfo.Length);
-                    var buf = new byte[bufSize];
-                    
-                    sr.Seek(-buf.Length, SeekOrigin.End);
-                    sr.Read(buf, 0, buf.Length);
-                    
-                    var str = Encoding.ASCII.GetString(buf);
-                    var lines = str.Split("\n");
-                    var lastLine = lines.Last(x => x.Length > 0);
-                    var beginToken = lastLine.Split(' ', '\t', '\r').First();
-                    if (beginToken.StartsWith("real"))
+                    var line = sr.ReadLine();
+                    if (!int.TryParse(line, out var lastIndex))
                     {
-                        // new run
-                        workingFileMode = FileMode.Create;
+                        throw new Exception($"Cannot parse {line}");
                     }
-                    else
-                    {
-                        if (int.TryParse(beginToken, out var lastValue))
-                        {
-                            // continue previous run
-                            from = lastValue; // don't use "lastValue + 1" - line can be uncompleted!
-                            workingFileMode = FileMode.Append;
-                        }
-                    }
+
+                    fromIndex = lastIndex + 1; // start from the next 
+                    workingFileMode = FileMode.Append;
                 }
             }
 
@@ -375,9 +363,9 @@ namespace ConsoleApp1
             using (var sw = new StreamWriter(fileInfo.Open(workingFileMode)))
             {
                 sw.WriteLine("=============================");
-                for (int i = from; i <= to; i++)
+                for (int i = fromIndex; i <= toIndex; i++)
                 {
-                    var bracesEnumerator = new BracesEnumerator(i.ToString("000000"), allowNegative);
+                    var bracesEnumerator = new BracesEnumerator(UnknownTickets[i].ToString("000000"), allowNegative);
                     var trees = bracesEnumerator.Braces(signsNumber, 0);
                     foreach (var tree in trees)
                     {
@@ -389,15 +377,22 @@ namespace ConsoleApp1
                         {
                             matchedExpr++;
                             var treeStr = tree.ToString();
-                            sw.WriteLine($"{i} : {treeStr}");
+                            sw.WriteLine($"{UnknownTickets[i]} : {treeStr}");
                             break;
                         }
 
-                        if (totalExpr % 1000000 == 0)
+                        const int divider = 1000_000;
+                        if (totalExpr % divider == 0)
                         {
                             sw.Flush();
-                            Console.WriteLine($"totalExpr = {totalExpr}");
+                            Console.WriteLine($"totalExpr = {totalExpr / divider} M, thread {fromIndex} in {(DateTime.Now - startTime).TotalMilliseconds} ms");
+                            Thread.Sleep(10); // allow other threads to do smth
                         }
+                    }
+
+                    using (var lockSw = new StreamWriter(failoverFileInfo.Name))
+                    {
+                        lockSw.WriteLine(i);
                     }
                 }
 
@@ -530,7 +525,41 @@ namespace ConsoleApp1
 //            var signsNumber = 5;
 //            Problem10598($"res-{signsNumber}.txt", signsNumber, allowNegative: false);
 
-            await MultithreadBarnaulHappyTickets(from: 0, to: 999_999, threadsNumber: 4, allowNegative: false);
+//            await MultithreadBarnaulHappyTickets(from: 0, to: 999_999, threadsNumber: 4, allowNegative: false);
+
+            var happyTickets = new Dictionary<int, int>(1000_000);
+            using (var sr = new StreamReader("barnaul-no-unary-minus.txt"))
+            {
+                while (true)
+                {
+                    var line = sr.ReadLine();
+                    if (line == null)
+                    {
+                        break;
+                    }
+                    var ticketNumStr = line.Split(' ').First();
+                    if (!int.TryParse(ticketNumStr, out var ticketNum))
+                    {
+                        throw new Exception($"Cannot parse {line}");
+                    }
+                    happyTickets.Add(ticketNum, ticketNum);
+                }
+            }
+
+            using (var sw = new StreamWriter("barnaul-unknown.txt"))
+            foreach (var i in Enumerable.Range(0, 1000_000))
+            {
+                if (!happyTickets.ContainsKey(i))
+                {
+                    UnknownTickets.Add(i);
+                    sw.WriteLine($"{i}");
+                }
+            }
+
+            happyTickets = null; // free memory
+            
+            
+            await MultithreadBarnaulHappyTickets(fromIndex: 0, toIndex: UnknownTickets.Count() + 1, threadsNumber: 4, allowNegative: true);
         }
     }
 }
