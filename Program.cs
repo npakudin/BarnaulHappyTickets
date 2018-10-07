@@ -313,7 +313,7 @@ namespace ConsoleApp1
 
     internal class Program
     {
-        public static async Task MultithreadBarnaulHappyTickets(int from, int to, int threadsNumber)
+        public static async Task MultithreadBarnaulHappyTickets(int from, int to, int threadsNumber, bool allowNegative = true)
         {
             var countPerThread = (to - from + threadsNumber - 1) / threadsNumber;
             var tasks = Enumerable.Range(0, threadsNumber).Select(i => Task.Factory.StartNew(() =>
@@ -322,12 +322,12 @@ namespace ConsoleApp1
                 var threadTo = Math.Min(to, from + (i + 1) * countPerThread - 1);
                 var threadFromStr = threadFrom.ToString("000000");
                 var threadToStr = threadTo.ToString("000000");
-                BarnaulHappyTickets(threadFrom, threadTo, $"barnaul-{threadFromStr}-{threadToStr}.txt");
+                BarnaulHappyTickets(threadFrom, threadTo, $"barnaul-{threadFromStr}-{threadToStr}.txt", allowNegative);
             }));
             await Task.WhenAll(tasks);
         }
         
-        public static void BarnaulHappyTickets(int from, int to, string filename)
+        public static void BarnaulHappyTickets(int from, int to, string filename, bool allowNegative = true)
         {
             const int signsNumber = 5; // not digits - places between them
 
@@ -377,7 +377,7 @@ namespace ConsoleApp1
                 sw.WriteLine("=============================");
                 for (int i = from; i <= to; i++)
                 {
-                    var bracesEnumerator = new BracesEnumerator(i.ToString("000000"));
+                    var bracesEnumerator = new BracesEnumerator(i.ToString("000000"), allowNegative);
                     var trees = bracesEnumerator.Braces(signsNumber, 0);
                     foreach (var tree in trees)
                     {
@@ -530,7 +530,7 @@ namespace ConsoleApp1
 //            var signsNumber = 5;
 //            Problem10598($"res-{signsNumber}.txt", signsNumber, allowNegative: false);
 
-            await MultithreadBarnaulHappyTickets(from: 912, to: 946, threadsNumber: 3);
+            await MultithreadBarnaulHappyTickets(from: 0, to: 999_999, threadsNumber: 4, allowNegative: false);
         }
     }
 }
